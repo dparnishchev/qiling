@@ -245,24 +245,27 @@ class QlLoaderELF(QlLoader):
             if not self.ql.os.path.is_safe_host_path(interp_hpath):
                 raise PermissionError(f'unsafe path: {interp_hpath}')
 
-            with open(interp_hpath, 'rb') as infile:
-                interp = ELFFile(infile)
-                min_vaddr = min(seg['p_vaddr'] for seg in interp.iter_segments(type='PT_LOAD'))
+            try:
+                with open(interp_hpath, 'rb') as infile:
+                    interp = ELFFile(infile)
+                    min_vaddr = min(seg['p_vaddr'] for seg in interp.iter_segments(type='PT_LOAD'))
 
-                # determine interpreter base address
-                # some old interpreters may not be PIE: p_vaddr of the first LOAD segment is not zero
-                # we should load interpreter at the address p_vaddr specified in such situation
-                interp_address = self.profile.getint('interp_address') if min_vaddr == 0 else 0
-                self.ql.log.debug(f'Interpreter addr: {interp_address:#x}')
+                    # determine interpreter base address
+                    # some old interpreters may not be PIE: p_vaddr of the first LOAD segment is not zero
+                    # we should load interpreter at the address p_vaddr specified in such situation
+                    interp_address = self.profile.getint('interp_address') if min_vaddr == 0 else 0
+                    self.ql.log.debug(f'Interpreter addr: {interp_address:#x}')
 
-                # load interpreter segments data to memory
-                interp_start, interp_end = load_elf_segments(interp, interp_address, interp_vpath)
+                    # load interpreter segments data to memory
+                    interp_start, interp_end = load_elf_segments(interp, interp_address, interp_vpath)
 
-                # add interpreter to the loaded images list
-                self.images.append(Image(interp_start, interp_end, interp_hpath))
+                    # add interpreter to the loaded images list
+                    self.images.append(Image(interp_start, interp_end, interp_hpath))
 
-                # determine entry point
-                entry_point = interp_address + interp['e_entry']
+                    # determine entry point
+                    entry_point = interp_address + interp['e_entry']
+            except FileNotFoundError as e:
+                self.ql.log.debug(f'Interpreter file {interp_hpath} not found. Proceeding without interpreter')
 
         # set mmap addr
         mmap_address = self.profile.getint('mmap_address')
